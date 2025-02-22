@@ -1,7 +1,8 @@
 # sql_manager.py
 
-import sqlite3, uuid, datetime, os, shutil
+import sqlite3, uuid, datetime, os, shutil, json
 from .internal import data_dir
+from . import instance_manager
 
 def generate_uuid() -> str:
     return f"{datetime.datetime.today().strftime('%Y%m%d%H%M%S%f')}{uuid.uuid4().hex}"
@@ -57,15 +58,45 @@ class instance:
                 "value": "TEXT",
                 "type": "TEXT"
             },
-            "overrides": {
+            "instances": {
                 "id": "TEXT NOT NULL PRIMARY KEY",
-                "value": "TEXT"
+                "name": "TEXT NOT NULL",
+                "type": "TEXT NOT NULL",
+                "url": "TEXT",
+                "max_tokens": "INTEGER NOT NULL",
+                "api": "TEXT",
+                "temperature": "REAL NOT NULL",
+                "seed": "INTEGER NOT NULL",
+                "overrides": "TEXT NOT NULL",
+                "default_model": "TEXT",
+                "title_model": "TEXT",
+                "model_directory": "TEXT",
+                "pinned": "INTEGER NOT NULL"
             }
         }
 
         for table_name, columns in tables.items():
             columns_def = ", ".join([f"{col_name} {col_def}" for col_name, col_def in columns.items()])
             cursor.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({columns_def})")
+
+        # Ollama is available but there are no instances added
+        if len(self.get_instances()) == 0 and shutil.which('ollama'):
+            overrides = {
+                'HSA_OVERRIDE_GFX_VERSION': '',
+                'CUDA_VISIBLE_DEVICES': '',
+                'ROCR_VISIBLE_DEVICES': ''
+            }
+            self.insert_or_update_instance(instance_manager.ollama_managed(generate_uuid(), 'Alpaca', 'http://0.0.0.0:11435', 0.7, 0, overrides, os.path.join(data_dir, '.ollama', 'models'), None, None, True))
+
+        if self.get_preference('run_remote'):
+            self.insert_or_update_instance(instance_manager.ollama(generate_uuid(), _('Legacy Remote Instance'), self.get_preference('remote_url'), self.get_preference('remote_bearer_token'), 0.7, 0, None, None, False))
+
+        # Remove stuff from previous versions (cleaning)
+        try:
+            cursor.execute("DELETE FROM preferences WHERE id IN ('default_model', 'local_port', 'remote_url', 'remote_bearer_token', 'run_remote', 'idle_timer', 'model_directory', 'temperature', 'seed', 'keep_alive', 'show_welcome_dialog')")
+            cursor.execute("DROP TABLE overrides")
+        except Exception as e:
+            pass
         sqlite_con.commit()
         sqlite_con.close()
 
@@ -184,10 +215,10 @@ class instance:
         cursor = sqlite_con.cursor()
         if cursor.execute("SELECT id FROM message WHERE id=?", (message.message_id,)).fetchone():
             cursor.execute("UPDATE message SET chat_id=?, role=?, model=?, date_time=?, content=? WHERE id=?",
-            (message.get_chat().chat_id, message_author, message.model, message.dt.strftime("%Y/%m/%d %H:%M:%S"), message.text if message.text else '', message.message_id))
+            (force_chat_id if force_chat_id else message.get_chat().chat_id, message_author, message.model, message.dt.strftime("%Y/%m/%d %H:%M:%S"), message.text if message.text else '', message.message_id))
         else:
             cursor.execute("INSERT INTO message (id, chat_id, role, model, date_time, content) VALUES (?, ?, ?, ?, ?, ?)",
-            (message.message_id, message.get_chat().chat_id, message_author, message.model, message.dt.strftime("%Y/%m/%d %H:%M:%S"), message.text if message.text else ''))
+            (message.message_id, force_chat_id if force_chat_id else message.get_chat().chat_id, message_author, message.model, message.dt.strftime("%Y/%m/%d %H:%M:%S"), message.text if message.text else ''))
         sqlite_con.commit()
         sqlite_con.close()
 
@@ -222,7 +253,7 @@ class instance:
         sqlite_con.commit()
         sqlite_con.close()
 
-    def get_preference(self, preference_name:str) -> object:
+    def get_preference(self, preference_name:str, default=None) -> object:
         sqlite_con = sqlite3.connect(self.sql_path)
         cursor = sqlite_con.cursor()
         result = cursor.execute("SELECT value, type FROM preferences WHERE id=?", (preference_name,)).fetchone()
@@ -237,6 +268,8 @@ class instance:
                 return type_map[result[1]](result[0])
             else:
                 return result[0]
+        else:
+            return default
 
     def get_preferences(self) -> dict:
         sqlite_con = sqlite3.connect(self.sql_path)
@@ -308,3 +341,67 @@ class instance:
         for row in result:
             overrides[row[0]] = row[1]
         return overrides
+
+    ###############
+    ## Instances ##
+    ###############
+
+    def get_instances(self) -> list:
+        columns = ['id', 'name', 'type', 'url', 'max_tokens', 'api', 'temperature', 'seed', 'overrides', 'model_directory', 'default_model', 'title_model', 'pinned']
+        sqlite_con = sqlite3.connect(self.sql_path)
+        cursor = sqlite_con.cursor()
+        result = cursor.execute("SELECT {} FROM instances".format(', '.join(columns))).fetchall()
+        sqlite_con.close()
+        instances = []
+        for row in result:
+            instances.append({})
+            for i, column in enumerate(columns):
+                value = row[i]
+                if column == 'overrides':
+                    try:
+                        value = json.loads(value)
+                    except Exception as e:
+                        value = {}
+                elif column == 'pinned':
+                    value = value == 1
+                instances[-1][column] = value
+        return instances
+
+    def insert_or_update_instance(self, ins):
+        data = {
+            'id': ins.instance_id,
+            'name': ins.name,
+            'type': ins.instance_type,
+            'url': ins.instance_url,
+            'max_tokens': ins.max_tokens,
+            'api': ins.api_key,
+            'temperature': ins.temperature,
+            'seed': ins.seed,
+            'overrides': json.dumps(ins.overrides),
+            'model_directory': ins.model_directory,
+            'default_model': ins.default_model,
+            'title_model': ins.title_model,
+            'pinned': ins.pinned
+        }
+
+        sqlite_con = sqlite3.connect(self.sql_path)
+        cursor = sqlite_con.cursor()
+        if cursor.execute("SELECT id FROM instances WHERE id=?", (data.get('id'),)).fetchone():
+            instance_id = data.pop('id', None)
+            set_clause = ', '.join(f"{key} = ?" for key in data.keys())
+            values = list(data.values()) + [instance_id]
+            cursor.execute(f"UPDATE instances SET {set_clause} WHERE id=?", values)
+        else:
+            columns = ', '.join(data.keys())
+            placeholders = ', '.join('?' for _ in data)
+            values = tuple(data.values())
+            cursor.execute(f'INSERT INTO instances ({columns}) VALUES ({placeholders})', values)
+        sqlite_con.commit()
+        sqlite_con.close()
+
+    def delete_instance(self, instance_id:str):
+        sqlite_con = sqlite3.connect(self.sql_path)
+        cursor = sqlite_con.cursor()
+        cursor.execute("DELETE FROM instances WHERE id=?", (instance_id,))
+        sqlite_con.commit()
+        sqlite_con.close()

@@ -5,9 +5,9 @@
 	<project_license>GPL-3.0-or-later</project_license>
   <launchable type="desktop-id">com.jeffser.Alpaca.desktop</launchable>
   <name>Alpaca</name>
-  <summary>Chat with local AI models</summary>
+  <summary>Chat with local and online AI models</summary>
 	<description>
-    <p>An Ollama client</p>
+    <p>A private AI client</p>
     <p>Features</p>
 	  <ul>
 	    <li>Built in Ollama instance</li>
@@ -87,9 +87,26 @@
   <url type="homepage">https://jeffser.com/alpaca/</url>
   <url type="donation">https://github.com/sponsors/Jeffser</url>
   <url type="translate">https://github.com/Jeffser/Alpaca/discussions/153</url>
-  <url type="contribute">https://github.com/Jeffser/Alpaca/discussions/154</url>
+  <url type="contribute">https://github.com/Jeffser/Alpaca/blob/main/CONTRIBUTING.md</url>
   <url type="vcs-browser">https://github.com/Jeffser/Alpaca</url>
   <releases>
+    <release version="5.0.0" date="2025-02-17">
+      <url type="details">https://github.com/Jeffser/Alpaca/releases/tag/5.0.0</url>
+      <description>
+        <p>New</p>
+        <ul>
+          <li>New instance manager</li>
+          <li>New welcome screen</li>
+        </ul>
+        <p>New Instances</p>
+        <ul>
+          <li>OpenAI ChatGPT</li>
+          <li>Google Gemini</li>
+          <li>Together AI</li>
+          <li>Venice</li>
+        </ul>
+      </description>
+    </release>
     <release version="4.0.1" date="2025-02-03">
       <url type="details">https://github.com/Jeffser/Alpaca/releases/tag/4.0.1</url>
       <description>

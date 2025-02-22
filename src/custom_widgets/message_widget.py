@@ -15,7 +15,7 @@ import matplotlib.mathtext as mathtext
 from PIL import Image
 from ..internal import config_dir, data_dir, cache_dir, source_dir
 from .table_widget import TableWidget
-from . import dialog_widget, terminal_widget
+from . import dialog_widget, terminal_widget, model_manager_widget
 
 logger = logging.getLogger(__name__)
 
@@ -343,15 +343,17 @@ class image(Gtk.Button):
     def __init__(self, file_name:str, file_content:str):
         self.file_type = 'image'
         self.file_content = file_content
+        self.width = 0
         try:
             image_data = base64.b64decode(self.file_content)
             loader = GdkPixbuf.PixbufLoader.new()
             loader.write(image_data)
             loader.close()
             pixbuf = loader.get_pixbuf()
+            self.width = int((pixbuf.get_property('width') * 240) / pixbuf.get_property('height'))
             texture = Gdk.Texture.new_for_pixbuf(pixbuf)
-            image = Gtk.Image.new_from_paintable(texture)
-            image.set_size_request(240, 240)
+            image = Gtk.Picture.new_for_paintable(texture)
+            image.set_size_request(self.width, 240)
             super().__init__(
                 child=image,
                 css_classes=["flat", "chat_image_button"],
@@ -396,15 +398,16 @@ class image_container(Gtk.ScrolledWindow):
         )
 
         super().__init__(
-            hexpand=True,
             height_request = 240,
-            child=self.container
+            child=self.container,
+            halign=2,
+            propagate_natural_width=True
         )
 
     def add_image(self, img:image):
         self.container.append(img)
         self.files.append(img)
-        self.set_size_request(240 * len(self.files), 240)
+        self.set_max_content_width(sum([f.width for f in self.files] + [12*(len(self.files)-1)]))
 
 class latex_image(Gtk.MenuButton):
     __gtype_name__ = 'AlpacaLatexImage'
@@ -578,21 +581,14 @@ class option_popup(Gtk.Popover):
         if self.message_element.spinner:
             self.message_element.container.remove(self.message_element.spinner)
             self.message_element.spinner = None
-        if not chat.busy:
+        model = model_manager_widget.get_selected_model().get_name()
+        if not chat.busy and model:
             self.message_element.set_text()
-            self.message_element.model = window.model_selector.get_selected_model().get_name()
+            self.message_element.model = model
             self.message_element.add_footer()
+            self.message_element.update_profile_picture()
             self.message_element.footer.options_button.set_sensitive(False)
-            data = {
-                "model": self.message_element.model,
-                "messages": chat.convert_to_ollama(),
-                "options": {"temperature": window.ollama_instance.tweaks["temperature"]},
-                "keep_alive": f"{window.ollama_instance.tweaks['keep_alive']}m"
-            }
-            if window.ollama_instance.tweaks["seed"] != 0:
-                data['options']['seed'] = window.ollama_instance.tweaks["seed"]
-            thread = threading.Thread(target=window.run_message, args=(data, self.message_element, chat))
-            thread.start()
+            threading.Thread(target=window.get_current_instance().generate_message, args=(self.message_element, model)).start()
         else:
             window.show_toast(_("Message cannot be regenerated while receiving a response"), window.main_overlay)
 
@@ -698,9 +694,9 @@ class message(Gtk.Box):
         self.profile_picture_data = None
         self.profile_picture = None
         if self.bot and self.model:
-            model = window.model_selector.get_model_by_name(self.model)
-            if model:
-                self.profile_picture_data = model.data.get('profile_picture')
+            found_models = [row.model for row in list(window.model_dropdown.get_model()) if row.model.get_name() == self.model]
+            if found_models:
+                self.profile_picture_data = found_models[0].data.get('profile_picture')
 
         self.container = Gtk.Box(
             orientation=1,
@@ -722,9 +718,9 @@ class message(Gtk.Box):
 
     def update_profile_picture(self):
         if self.bot and self.model:
-            model = window.model_selector.get_model_by_name(self.model)
-            if model:
-                new_profile_picture_data = model.data.get('profile_picture')
+            found_models = [row.model for row in list(window.model_dropdown.get_model()) if row.model.get_name() == self.model]
+            if found_models:
+                new_profile_picture_data = found_models[0].data.get('profile_picture')
                 if new_profile_picture_data != self.profile_picture_data:
                     self.profile_picture_data = new_profile_picture_data
                     self.add_footer()
@@ -764,6 +760,8 @@ class message(Gtk.Box):
         self.footer.add_options_button()
 
     def update_message(self, data:dict):
+        def write(content:str):
+            self.content_children[-1].buffer.insert(self.content_children[-1].buffer.get_end_iter(), content, len(content.encode('utf-8')))
         chat = self.get_chat()
         if chat.busy:
             vadjustment = chat.scrolledwindow.get_vadjustment()
@@ -774,12 +772,13 @@ class message(Gtk.Box):
                 GLib.idle_add(vadjustment.set_value, vadjustment.get_upper())
             elif vadjustment.get_value() + 50 >= vadjustment.get_upper() - vadjustment.get_page_size():
                 GLib.idle_add(vadjustment.set_value, vadjustment.get_upper() - vadjustment.get_page_size())
-            GLib.idle_add(self.content_children[-1].buffer.insert, self.content_children[-1].buffer.get_end_iter(), data['message']['content'], len(data['message']['content'].encode('utf-8')))
+            GLib.idle_add(write, data.get('content', ''))
 
-        if not chat.busy or ('done' in data and data['done']):
+        if not chat.busy or data.get('done', False):
             self.footer.options_button.set_sensitive(True)
-            if not chat.quick_chat:
-                window.chat_list_box.get_tab_by_name(chat.get_name()).spinner.set_visible(False)
+            tab = window.chat_list_box.get_tab_by_name(chat.get_name())
+            if not chat.quick_chat and tab:
+                tab.spinner.set_visible(False)
                 if window.chat_list_box.get_current_chat().get_name() != chat.get_name():
                     window.chat_list_box.get_tab_by_name(chat.get_name()).indicator.set_visible(True)
                 if chat.welcome_screen:
@@ -832,6 +831,8 @@ class message(Gtk.Box):
                 normal_text = self.text[pos:]
                 if normal_text.strip():
                     parts.append({"type": "normal", "text": normal_text.strip()})
+
+            self.text = re.sub(patterns[0][1], '', self.text)
 
             for part in parts:
                 if part['type'] == 'normal':

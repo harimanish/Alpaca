@@ -1,10 +1,11 @@
-<p align="center"><img src="https://jeffser.com/images/alpaca/logo.svg"></p>
+<p align="center"><img src="https://jeffser.com/images/alpaca/logo.svg">
+<h1 align="center">Alpaca</h1>
 
-# Alpaca
+<p align="center">Alpaca is an <a href="https://github.com/ollama/ollama">Ollama</a> client where you can manage and chat with multiple models, Alpaca provides an easy and beginner friendly way of interacting with local AI, everything is open source and powered by Ollama.</p>
 
-<a href='https://flathub.org/apps/com.jeffser.Alpaca'><img width='240' alt='Download on Flathub' src='https://flathub.org/api/badge?locale=en'/></a>
+<p align="center">You can also use third party AI providers such as Gemini, ChatGPT and more!</p>
 
-Alpaca is an [Ollama](https://github.com/ollama/ollama) client where you can manage and chat with multiple models, Alpaca provides an easy and beginner friendly way of interacting with local AI, everything is open source and powered by Ollama.
+<p align="center"><a href='https://flathub.org/apps/com.jeffser.Alpaca'><img width='190' alt='Download on Flathub' src='https://flathub.org/api/badge?locale=en'/></a></p>
 
 ---
 
@@ -31,8 +32,8 @@ Alpaca is an [Ollama](https://github.com/ollama/ollama) client where you can man
 
 ## Screenies
 
-Normal conversation | Image recognition | Code highlighting | YouTube transcription | Model management
-:------------------:|:-----------------:|:-----------------:|:---------------------:|:----------------:
+Normal conversation | Image recognition | Rich text formatting | Integrated script execution | YouTube transcription
+:------------------:|:-----------------:|:--------------------:|:---------------------------:|:--------------------:
 ![screenie1](https://jeffser.com/images/alpaca/screenie1.png) | ![screenie2](https://jeffser.com/images/alpaca/screenie2.png) | ![screenie3](https://jeffser.com/images/alpaca/screenie3.png) | ![screenie4](https://jeffser.com/images/alpaca/screenie5.png) | ![screenie5](https://jeffser.com/images/alpaca/screenie6.png)
 
 ## Installation
@@ -95,6 +96,8 @@ Language               | Contributors
 🇮🇹 Italian              | [Edoardo Brogiolo](https://github.com/edo0)
 🇯🇵 Japanese             | [Shidore](https://github.com/sh1d0re)
 🇳🇱 Dutch                | [Henk Leerssen](https://github.com/Henkster72)
+🇮🇩 Indonesian           | [Nofal Briansah](https://github.com/nofalbriansah)
+🌐 Tamil                | [Harimanish](https://github.com/harimanish)
 
 Want to add a language? Visit [this discussion](https://github.com/Jeffser/Alpaca/discussions/153) to get started!
 

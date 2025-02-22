@@ -59,6 +59,8 @@ translators = [
     'Edoardo Brogiolo (Italian) https://github.com/edo0',
     'Shidore (Japanese) https://github.com/sh1d0re',
     'Henk Leerssen (Dutch) https://github.com/Henkster72',
+    'Nofal Briansah (Indonesian) https://github.com/nofalbriansah',
+    'Harimanish (Tamil) https://github.com/harimanish'
 ]
 
 parser = argparse.ArgumentParser(description="Alpaca")
@@ -79,6 +81,8 @@ class AlpacaService:
             <method name='Ask'>
                 <arg type='s' name='message' direction='in'/>
             </method>
+            <method name='Present'>
+            </method>
         </interface>
     </node>
     """
@@ -89,19 +93,25 @@ class AlpacaService:
     def IsRunning(self):
         return 'yeah'
 
+    def Present(self):
+        self.app.props.active_window.present()
+
     def Open(self, chat_name:str):
         for chat_row in self.app.props.active_window.chat_list_box.tab_list:
             if chat_row.chat_window.get_name() == chat_name:
                 self.app.props.active_window.chat_list_box.select_row(chat_row)
+                self.Present()
 
     def Create(self, chat_name:str):
         self.app.props.active_window.chat_list_box.new_chat(chat_name)
+        self.Present()
 
     def Ask(self, message:str):
         time.sleep(1)
         self.app.props.active_window.quick_chat(message)
 
 class AlpacaApplication(Adw.Application):
+    __gtype_name__ = 'AlpacaApplication'
     """The main application singleton class."""
 
     def __init__(self, version):
@@ -119,7 +129,9 @@ class AlpacaApplication(Adw.Application):
             except:
                 # The app is probably already running so let's use dbus to interact if needed
                 app_service = SessionBus().get("com.jeffser.Alpaca")
-                if app_service.IsRunning() != 'yeah':
+                if app_service.IsRunning() == 'yeah':
+                    app_service.Present()
+                else:
                     raise Exception('Alpaca not running')
                 if self.args.new_chat:
                     app_service.Create(self.args.new_chat)
@@ -155,7 +167,7 @@ class AlpacaApplication(Adw.Application):
             developers=['Jeffser https://jeffser.com'],
             designers=['Jeffser https://jeffser.com', 'Tobias Bernard (App Icon) https://tobiasbernard.com/'],
             translator_credits='\n'.join(translators),
-            copyright='© 2025 Jeffser\n© 2025 Ollama',
+            copyright='© 2025 Alpaca Jeffry Samuel Eduarte Rojas\n© 2025 Ollama Meta Platforms, Inc.\n© 2025 ChatGPT OpenAI, Inc.\n© 2025 Gemini Google Alphabet, Inc.\n© 2025 Together.ai\n© 2025 Venice AI',
             issue_url='https://github.com/Jeffser/Alpaca/issues',
             license_type=3,
             website="https://jeffser.com/alpaca",
@@ -183,7 +195,6 @@ def main(version):
     parser.add_argument('--list-chats', action='store_true', help='Display all the current chats')
     parser.add_argument('--select-chat', type=str, metavar='"CHAT"', help="Select a chat on launch")
     parser.add_argument('--ask', type=str, metavar='"MESSAGE"', help="Open quick ask with message")
-    parser.add_argument('--change-port', type=int, metavar='"PORT"', help="Change the integrated instance port")
     args = parser.parse_args()
 
     if args.version:
@@ -206,13 +217,6 @@ def main(version):
         sqlite_con = sqlite3.connect(os.path.join(data_dir, "alpaca.db"))
         cursor = sqlite_con.cursor()
         cursor.execute("UPDATE preferences SET value=? WHERE id=?", (args.select_chat, 'selected_chat'))
-        sqlite_con.commit()
-        sqlite_con.close()
-
-    if args.change_port:
-        sqlite_con = sqlite3.connect(os.path.join(data_dir, "alpaca.db"))
-        cursor = sqlite_con.cursor()
-        cursor.execute("UPDATE preferences SET value=? WHERE id=?", (args.change_port, 'local_port'))
         sqlite_con.commit()
         sqlite_con.close()
 
